@@ -1,0 +1,105 @@
+# .cursorrules — App "Secretária" (React Native + Expo)
+
+## Projeto
+App mobile pessoal: agenda/secretária, clima (hoje + 3 dias), cotação do dólar na moeda do aparelho (ou manual), widget na tela inicial e resumo diário por notificação. Sem backend próprio, tudo roda no dispositivo. Textos da interface em pt-BR.
+
+## Stack (não trocar sem pedir)
+- Expo (SDK estável mais recente) com development build via EAS. Nunca assumir Expo Go (widgets exigem código nativo).
+- TypeScript estrito. Proibido `any`; usar `unknown` + validação com zod.
+- Navegação: Expo Router.
+- Estado: Zustand. Dados remotos: TanStack Query.
+- Persistência: expo-sqlite (agenda), MMKV ou AsyncStorage (configurações e cache).
+- Libs: expo-location, expo-localization, expo-notifications, expo-task-manager, expo-background-fetch (ou expo-background-task, conforme o SDK).
+- Datas: date-fns com locale pt-BR e detecção pelo aparelho.
+- Testes: Jest. Lint: ESLint + Prettier.
+- Antes de adicionar dependência nova: justificar e checar compatibilidade com o SDK. Nunca inventar versões; se não tiver certeza, consultar a documentação.
+
+## APIs externas
+- Clima: Open-Meteo (forecast + geocoding), sem chave, `timezone=auto`, unidades métricas.
+- Cotação: AwesomeAPI como principal, Frankfurter como fallback, cache local como último recurso (mostrar data/hora da última atualização).
+- Geocoding reverso: expo-location, com fallback para Nominatim (respeitar User-Agent e limite de uso).
+- Nenhuma chave de API no código. Segredos só em variáveis de ambiente/EAS secrets.
+- Toda chamada passa por um cliente HTTP único em `services/` com timeout, retry limitado e erros tipados.
+- Toda resposta externa é validada com zod antes de ser usada.
+
+## Arquitetura
+```
+src/
+  app/            rotas (Expo Router)
+  features/
+    agenda/       db, hooks, componentes
+    weather/      api, mapeamento WMO, componentes
+    currency/     api com fallback, componentes
+    notifications/ permissões, agendamento, task
+    widget/       snapshot, handlers
+    settings/
+  services/       http client, storage
+  shared/         ui, tema, utils
+```
+- Uma feature não importa de outra diretamente; compartilhar via `shared/` ou `services/`.
+- Lógica de negócio em funções puras e testáveis, fora dos componentes.
+- Componentes pequenos (idealmente < 150 linhas), uma responsabilidade cada.
+- Camada de API separada da UI; componentes nunca chamam `fetch` direto.
+
+## Padrões de código
+- Componentes funcionais com hooks. Sem classes.
+- Nomes: componentes em PascalCase, hooks `useX`, arquivos de componente em PascalCase, demais em camelCase ou kebab-case (manter consistência).
+- Estilos com StyleSheet e tokens de tema centralizados em `shared/`. Sem cores ou espaçamentos soltos no código.
+- Tema claro/escuro seguindo o sistema.
+- Todo texto de UI passa por camada de strings (preparado para i18n), nada hardcoded espalhado.
+- Imports absolutos via alias (`@/`).
+- Sem `console.log` esquecido; usar um logger simples com nível.
+
+## UX e robustez
+- Toda tela tem estados de loading, erro e vazio.
+- Funcionar offline com cache e exibir "última atualização".
+- Acessibilidade: `accessibilityLabel`, contraste adequado, suporte a fonte dinâmica.
+- Permissões: explicar o motivo antes de pedir, tratar concedido/negado/perguntar depois e oferecer atalho para as configurações do sistema.
+
+## Notificações
+- Pedir permissão somente após onboarding explicando o benefício.
+- Canal de notificação Android configurado explicitamente.
+- Resumo diário: tarefa em background atualiza dados e reagenda a notificação do dia seguinte com texto fresco.
+- Documentar a limitação: o SO controla a frequência do background, então o texto pode ficar defasado.
+- Texto do resumo gerado por função pura com teste.
+
+## Widget
+- Android primeiro (`react-native-android-widget`), iOS (WidgetKit via `@bacons/apple-targets`) depois.
+- O widget só lê um snapshot JSON local (clima, cotação, agenda); nunca faz chamadas de rede próprias além do necessário.
+- O snapshot é atualizado em background e ao abrir o app. Mostrar horário da última atualização.
+
+## Testes obrigatórios
+Mapeamento de código WMO, formatação de moeda, fallback de cotação, geração do texto da notificação.
+
+## Fluxo de trabalho
+- Trabalhar em fases e parar ao fim de cada uma para validação:
+  1. Setup  2. Clima  3. Cotação  4. Agenda  5. Notificações  6. Widget  7. Polimento
+- Não implementar nada de fases futuras sem pedido.
+- Antes de mudanças grandes, listar os arquivos que serão alterados.
+- Se algo estiver ambíguo, perguntar antes de assumir.
+- Rodar lint, typecheck e testes antes de dar uma tarefa como concluída.
+
+---
+
+## 🪨 MODO CAVEMAN (estilo das respostas no chat)
+Objetivo: economizar tokens. Falar pouco, dizer só o necessário.
+
+Regras:
+- Frases curtas. Fragmentos ok. Sem rodeio, sem introdução, sem resumo no fim.
+- Cortar: "claro!", "ótima pergunta", "vou te explicar", pedidos de desculpa, repetição do que o usuário disse.
+- Cortar artigos e conectivos desnecessários. Verbo no infinitivo ou imperativo quando der.
+- Preferir: ação → resultado. Exemplo: "Criar hook useWeather. Cache 10 min. Pronto." em vez de parágrafo explicando.
+- Listas curtas em vez de texto corrido. Sem enfeite, sem emoji.
+- Termos técnicos, nomes de arquivos, comandos e números sempre exatos. Nunca abreviar o que muda o significado.
+- Explicar o "porquê" só se for não óbvio ou se o usuário pedir ("explica"/"detalha").
+- Diff/código direto, sem narrar linha por linha.
+
+Exceções (voltar a escrever normal e completo):
+- Avisos de segurança, perda de dados ou ação destrutiva (apagar banco, resetar git, sobrescrever arquivos).
+- Pedidos de confirmação ou perguntas em que ambiguidade poderia causar erro.
+- Quando o usuário pedir explicação detalhada ou disser "sai do caveman".
+
+O que NÃO entra no caveman:
+- Código, nomes de variáveis e testes: qualidade normal.
+- Mensagens de commit, README e comentários no código: claros e completos.
+- Textos de UI do app: pt-BR natural, nunca em estilo caveman.
